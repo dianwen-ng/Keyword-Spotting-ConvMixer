@@ -28,7 +28,7 @@ To build on Google Speech Command dataset, you can exploit the script in `data_p
 
 To train, check the validity of the path for manifest_filepath in `configs/ConvMixer.yaml`. Following that, run the command below to start training.
 
-python main.py
+`python main.py`
 
 NOTE: This current version is built for original clean Google Speech Command. We will release the setup for far-field noisy keyword spotting in the future. 
 
