@@ -1,0 +1,57 @@
+data:
+  labels: ["unknown", "silence", "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go"]
+  
+  train_dataset:
+    mode: "train"
+    manifest_filepath: "manifests/train_manifest.json"
+    num_mel_bins: 64
+    target_length: 98
+    freq_masks: 25
+    time_masks: 25 
+    mixup: 0.5
+    mean: -8.522078
+    std: 4.0515576
+    noise: True
+
+  validation_dataset:
+    mode: "evaluation"
+    manifest_filepath: "manifests/validation_manifest.json"
+    num_mel_bins: 64
+    target_length: 98
+    freq_masks: 0
+    time_masks: 0 
+    mixup: 0
+    mean: -8.522078
+    std: 4.0515576
+    noise: False
+
+  test_dataset:
+    mode: "test"
+    manifest_filepath: "manifests/test_manifest.json"
+    num_mel_bins: 64
+    target_length: 98
+    freq_masks: 0
+    time_masks: 0 
+    mixup: 0
+    mean: -8.522078
+    std: 4.0515576
+    noise: False
+
+model:
+  input_size: (98, 64)
+  num_classes: 12
+  feat_dim: 64
+  dropout: 0.0
+
+seed: 4823
+
+trainer:
+  use_gpu: True
+  train_batch_size: 128
+  val_batch_size: 512
+  lr: 0.006
+  num_workers: 8
+  num_epochs: 100
+  save_dir: "savemodels"
+  log_interval: 200
+
