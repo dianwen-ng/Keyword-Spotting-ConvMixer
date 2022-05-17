@@ -52,7 +52,7 @@ def train(model, device, train_loader, optimizer, scaler, epoch, log_interval=10
         data, target = data.to(device), target.to(device)
         
         with autocast():
-            output = model(data)
+            output, _ = model(data)
             loss = criterion(output, target)
         
         train_loss += loss
@@ -100,7 +100,7 @@ def test(model, device, test_loader, ep):
 
             data, target = data.to(device), target.to(device)
 
-            output = model(data)
+            output, _ = model(data)
             loss = criterion(output, target) 
             test_loss += loss
             pred = output.cpu().data.numpy().argmax(axis=1)
