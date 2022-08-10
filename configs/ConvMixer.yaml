@@ -2,6 +2,7 @@ data:
   labels: ["unknown", "silence", "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go"]
   
   train_dataset:
+    labels: ["unknown", "silence", "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go"]
     mode: "train"
     manifest_filepath: "manifests/train_manifest.json"
     num_mel_bins: 64
@@ -14,6 +15,7 @@ data:
     noise: True
 
   validation_dataset:
+    labels: ["unknown", "silence", "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go"]
     mode: "evaluation"
     manifest_filepath: "manifests/validation_manifest.json"
     num_mel_bins: 64
@@ -26,6 +28,7 @@ data:
     noise: False
 
   test_dataset:
+    labels: ["unknown", "silence", "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go"]
     mode: "test"
     manifest_filepath: "manifests/test_manifest.json"
     num_mel_bins: 64
@@ -38,7 +41,7 @@ data:
     noise: False
 
 model:
-  input_size: (98, 64)
+  input_size: 98,64
   num_classes: 12
   feat_dim: 64
   dropout: 0.0
@@ -54,4 +57,5 @@ trainer:
   num_epochs: 100
   save_dir: "savemodels"
   log_interval: 200
+
 
