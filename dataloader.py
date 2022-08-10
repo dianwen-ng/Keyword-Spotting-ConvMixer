@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional
 from torch.utils.data import Dataset
+import os
 import random
 
 class AudiosetDataset(Dataset):
@@ -42,23 +43,90 @@ class AudiosetDataset(Dataset):
         # if add noise for data augmentation
         self.noise = self.audio_conf.get('noise')
         if self.noise == True:
-            print('Dataloader performs with noise augmentation')
+            if not os.path.exists('data/noise'):
+                print('No existing noise data file found. Create data from command background noise')
+                self._make_background_noise_list()
+            self.noise_data = open('data/noise').readlines()
+            self.noise_data = [i.replace('\n', '') for i in self.noise_data]
+                
+            print('Dataloader performs with noise augmentation using noises from "noise" file. Noise added at 50 dB')
+            print('NOTE: If desired to change noise decibel, please modify _wav2fbank with desire noise level.')
             
         ## class label
-        self.Label2Indx = {
-            'unknown': 0,
-            'silence': 1,
-            'yes':     2,
-            'no':      3,
-            'up':      4,
-            'down':    5,
-            'left':    6,
-            'right':   7,
-            'on':      8,
-            'off':     9,
-            'stop':    10,
-            'go':      11}
+        self.Label2Indx = {}
+        for i, cls in enumerate(self.audio_conf.get('labels')):
+            self.Label2Indx[cls] = i
+           
         
+    def _make_background_noise_list(self,):
+        tmp = eval(self.dataset[0])['audio_filepath']
+        for i in range(2):
+            tmp = os.path.split(tmp)[0]
+
+        bgn = os.listdir(os.path.join(tmp, '_background_noise_'))
+        with open(os.path.join('data', 'noise'), 'w') as fout:
+            for item in bgn:
+                if 'wav' in item:
+                    print(os.path.join(tmp, '_background_noise_', item), file=fout)
+                    
+    def _add_snr_noise(self, audio, noise, snr):
+        noise_len = noise.size(1)
+        if noise_len < audio.size(1):
+            rand_start = np.random.randint(audio.size(1) - noise_len)
+            noise_tmp = torch.zeros_like(audio)
+            noise_tmp[:, rand_start: rand_start+noise_len] = noise
+
+        elif noise_len > audio.size(1):
+            rand_start = np.random.randint(noise_len - audio.size(1))
+            noise_tmp = noise = noise[:, rand_start: rand_start + audio.size(1)]
+
+        else:
+            noise_tmp = noise
+
+        audio_power = audio.norm(p=2)
+        noise_power = noise.norm(p=2)
+
+        snr = 10 ** (snr/20)
+        scale = snr * noise_power/ audio_power
+        augmented = (scale * audio + noise_tmp) / 2
+
+        return augmented
+    
+    def _spec_augmentation(self, x,
+                           num_time_mask=1,
+                           num_freq_mask=1,
+                           max_time=25,
+                           max_freq=25):
+
+        """perform spec augmentation 
+        Args:
+            x: input feature, T * F 2D
+            num_t_mask: number of time mask to apply
+            num_f_mask: number of freq mask to apply
+            max_t: max width of time mask
+            max_f: max width of freq mask
+        Returns:
+            augmented feature
+        """
+        max_freq_channel, max_frames = x.size()
+
+        # time mask
+        for i in range(num_time_mask):
+            start = random.randint(0, max_frames - 1)
+            length = random.randint(1, max_time)
+            end = min(max_frames, start + length)
+            x[:, start:end] = 0
+
+        # freq mask
+        for i in range(num_freq_mask):
+            start = random.randint(0, max_freq_channel - 1)
+            length = random.randint(1, max_freq)
+            end = min(max_freq_channel, start + length)
+            x[start:end, :] = 0
+
+        return x
+    
+    
     def _wav2fbank(self, filename1, filename2=None):
         # no mixup
         if filename2 == None:
@@ -85,8 +153,14 @@ class AudiosetDataset(Dataset):
                     
             # sample lambda from beta distribtion
             mix_lambda = np.random.beta(10, 10)
-
             mix_waveform = mix_lambda * waveform1 + (1 - mix_lambda) * waveform2
+            
+            # add noise here
+            sample_noise = np.random.choice(self.noise_data)
+            noise_wav = torchaudio.load(sample_noise)[0]
+            add_with_snr = 50   ## if desire for random range of snr, consider -> np.random.choice(np.arange(low, high + 1))
+            mix_waveform = self._add_snr_noise(mix_waveform, noise_wav, add_with_snr)
+            
             waveform = mix_waveform - mix_waveform.mean()
 
         fbank = torchaudio.compliance.kaldi.fbank(waveform, htk_compat=True, 
@@ -142,26 +216,14 @@ class AudiosetDataset(Dataset):
             label_indices = torch.FloatTensor(label_indices)
 
         ## perform SpecAug, not do for eval set
-        freqm = torchaudio.transforms.FrequencyMasking(self.freqm)
-        timem = torchaudio.transforms.TimeMasking(self.timem)
-        fbank = torch.transpose(fbank, 0, 1)
-        
-        if self.freqm != 0:
-            fbank = freqm(fbank)
-        
-        if self.timem != 0:  
-            fbank = timem(fbank)
-        
-        fbank = torch.transpose(fbank, 0, 1)
+        if self.audio_conf.get('mode') == 'train':
+            fbank = self._spec_augmentation(fbank, max_freq=25, max_time=25)
 
         # normalize the input
         fbank = (fbank - self.norm_mean) / (self.norm_std * 2)
-
-        # perform noise perturbation with random white noise
-        if self.noise == True:
-            fbank = fbank + torch.rand(fbank.shape[0], fbank.shape[1]) * np.random.rand() / 10
-            
-            ## random time shift +/- 10 frame
+        
+        ## random time shift +/- 10 frame
+        if self.audio_conf.get('mode') == 'train':
             fbank = torch.roll(fbank, np.random.randint(-10, 10), 0)
 
         # the output fbank shape is [time_frame_num, frequency_bins], e.g., [98, 64]
